@@ -1,0 +1,36 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - run: ./gradlew :klassify-sdk:jvmTest :klassify-cli:linkReleaseExecutableMacosArm64 :klassify-cli:linkReleaseExecutableMacosX64 --console=plain
+      - name: Package native binaries
+        shell: bash
+        run: |
+          for spec in macosArm64:arm64 macosX64:x64; do
+            target="${spec%%:*}"
+            arch="${spec##*:}"
+            mkdir -p "dist/$arch"
+            cp "klassify-cli/build/bin/$target/releaseExecutable/klassify.kexe" "dist/$arch/klassify"
+            cp LICENSE "dist/$arch/LICENSE"
+            tar -czf "klassify-macos-$arch.tar.gz" -C "dist/$arch" klassify LICENSE
+          done
+      - run: gh release create "$GITHUB_REF_NAME" klassify-macos-*.tar.gz --generate-notes --verify-tag
+        env:
+          GH_TOKEN: ${{ github.token }}

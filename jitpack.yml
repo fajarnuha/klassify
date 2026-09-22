@@ -1,0 +1,4 @@
+jdk:
+  - openjdk21
+install:
+  - ./gradlew :klassify-sdk:publishJvmPublicationToMavenLocal -PGROUP="${GROUP}.${ARTIFACT}" -PVERSION_NAME="$VERSION"

@@ -1,0 +1,24 @@
+{
+  "state": "Playful terrier who loves kids and needs a long run every day.",
+  "model": "jev-latest",
+  "questions": {
+    "childFriendly": {
+      "type": "noul",
+      "instructions": "Is this pet described as friendly with children?"
+    },
+    "species": {
+      "type": "choice",
+      "instructions": "What kind of pet is described?",
+      "criteria": {
+        "DOG": null,
+        "CAT": null,
+        "OTHER": null
+      }
+    },
+    "energy": {
+      "type": "score",
+      "instructions": "How active is this pet?",
+      "criteria": ["Mostly relaxed", "Moderately active", "Needs vigorous daily exercise"]
+    }
+  }
+}
