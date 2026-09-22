@@ -68,10 +68,10 @@ For a JVM or Android project, add the JitPack repository and SDK dependency:
 
 ```kotlin
 repositories { maven("https://jitpack.io") }
-dependencies { implementation("com.github.fajarnuha.klassify:klassify-sdk-jvm:v0.1.0") }
+dependencies { implementation("com.github.fajarnuha:klassify:v0.1.0") }
 ```
 
-In a recent Gradle project, put the repository in `dependencyResolutionManagement.repositories` in `settings.gradle.kts`. The JitPack build publishes the JVM variant of the Kotlin Multiplatform SDK. Native consumers need a repository carrying the native variants.
+In a recent Gradle project, put the repository in `dependencyResolutionManagement.repositories` in `settings.gradle.kts`. JitPack serves the JVM variant of `klassify-sdk` at the repository coordinate above. Native consumers need a repository carrying the native variants.
 
 ## Verify
 
