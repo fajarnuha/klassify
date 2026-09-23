@@ -39,7 +39,7 @@ import platform.posix.stdin
 import platform.posix.stdout
 import kotlin.system.exitProcess
 
-private const val VERSION = "0.1.1"
+private const val VERSION = "0.1.2"
 
 private class Klassify : CliktCommand(name = "klassify") {
     override fun run() = Unit

@@ -4,5 +4,5 @@ plugins {
 
 allprojects {
     group = providers.gradleProperty("GROUP").getOrElse("com.fajarnuha.klassify")
-    version = providers.gradleProperty("VERSION_NAME").getOrElse("0.1.1")
+    version = providers.gradleProperty("VERSION_NAME").getOrElse("0.1.2")
 }

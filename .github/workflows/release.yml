@@ -8,10 +8,8 @@ permissions:
   contents: read
 
 jobs:
-  release:
+  macos:
     runs-on: macos-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -20,7 +18,7 @@ jobs:
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
       - run: ./gradlew :klassify-sdk:jvmTest :klassify-cli:linkReleaseExecutableMacosArm64 :klassify-cli:linkReleaseExecutableMacosX64 --console=plain
-      - name: Package native binaries
+      - name: Package macOS binaries
         shell: bash
         run: |
           for spec in macosArm64:arm64 macosX64:x64; do
@@ -31,6 +29,76 @@ jobs:
             cp LICENSE "dist/$arch/LICENSE"
             tar -czf "klassify-macos-$arch.tar.gz" -C "dist/$arch" klassify LICENSE
           done
-      - run: gh release create "$GITHUB_REF_NAME" klassify-macos-*.tar.gz --generate-notes --verify-tag
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: klassify-macos-*.tar.gz
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - run: ./gradlew :klassify-cli:linkReleaseExecutableLinuxX64 :klassify-cli:linkReleaseExecutableLinuxArm64 --console=plain
+      - name: Package and smoke-test Linux binaries
+        shell: bash
+        run: |
+          for spec in linuxX64:x64 linuxArm64:arm64; do
+            target="${spec%%:*}"
+            arch="${spec##*:}"
+            mkdir -p "dist/$arch"
+            cp "klassify-cli/build/bin/$target/releaseExecutable/klassify.kexe" "dist/$arch/klassify"
+            cp LICENSE "dist/$arch/LICENSE"
+            tar -czf "klassify-linux-$arch.tar.gz" -C "dist/$arch" klassify LICENSE
+          done
+          dist/x64/klassify --help
+          dist/x64/klassify run --help
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-linux
+          path: klassify-linux-*.tar.gz
+          if-no-files-found: error
+
+  linux-arm64:
+    needs: linux
+    runs-on: ubuntu-22.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-linux
+      - run: |
+          sha256sum klassify-linux-*.tar.gz > SHA256SUMS
+          sed "s/@VERSION@/$GITHUB_REF_NAME/g" scripts/install.sh > install.sh
+          KLASSIFY_BASE_URL="file://$PWD" KLASSIFY_INSTALL_DIR="$RUNNER_TEMP/klassify-install" sh install.sh
+          "$RUNNER_TEMP/klassify-install/klassify" --help
+          "$RUNNER_TEMP/klassify-install/klassify" run --help
+
+  release:
+    needs: [macos, linux, linux-arm64]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - name: Check installer against release archives
+        shell: bash
+        run: |
+          (cd dist && sha256sum klassify-*.tar.gz > SHA256SUMS)
+          sed "s/@VERSION@/$GITHUB_REF_NAME/g" scripts/install.sh > dist/install.sh
+          sh -n dist/install.sh
+          KLASSIFY_BASE_URL="file://$PWD/dist" KLASSIFY_INSTALL_DIR="$RUNNER_TEMP/klassify-install" sh dist/install.sh
+          "$RUNNER_TEMP/klassify-install/klassify" run --help | grep -F -- '-j, --state-json'
+      - run: gh release create "$GITHUB_REF_NAME" dist/klassify-*.tar.gz dist/SHA256SUMS dist/install.sh --generate-notes --verify-tag
         env:
           GH_TOKEN: ${{ github.token }}

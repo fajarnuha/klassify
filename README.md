@@ -51,6 +51,14 @@ Install the macOS CLI with Homebrew:
 brew install fajarnuha/tools/klassify
 ```
 
+On Linux (x64 or ARM64, glibc), install the latest release to `~/.local/bin`:
+
+```sh
+curl -fsSL https://github.com/fajarnuha/klassify/releases/latest/download/install.sh | sh
+```
+
+The installer verifies the archive's SHA-256 checksum before installing. To inspect it first, download `install.sh` from the [latest release](https://github.com/fajarnuha/klassify/releases/latest) and run `sh install.sh`. Set `KLASSIFY_INSTALL_DIR` to choose another directory. Ensure the directory is in your `PATH`.
+
 Or set `TYPESAFE_API_KEY`, then build and run on this Mac:
 
 ```sh
@@ -68,7 +76,7 @@ For a JVM or Android project, add the JitPack repository and SDK dependency:
 
 ```kotlin
 repositories { maven("https://jitpack.io") }
-dependencies { implementation("com.github.fajarnuha:klassify:v0.1.1") }
+dependencies { implementation("com.github.fajarnuha:klassify:v0.1.2") }
 ```
 
 In a recent Gradle project, put the repository in `dependencyResolutionManagement.repositories` in `settings.gradle.kts`. JitPack serves the JVM variant of `klassify-sdk` at the repository coordinate above. Native consumers need a repository carrying the native variants.
