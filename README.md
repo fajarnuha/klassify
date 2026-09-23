@@ -55,10 +55,10 @@ Or set `TYPESAFE_API_KEY`, then build and run on this Mac:
 
 ```sh
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer ./gradlew :klassify-cli:linkDebugExecutableMacosArm64
-./klassify-cli/build/bin/macosArm64/debugExecutable/klassify.kexe classify --recipe examples/pet.json
+./klassify-cli/build/bin/macosArm64/debugExecutable/klassify.kexe run --recipe examples/pet.json
 ```
 
-The recipe contains a `questions` object, optional `model`, and optional `state`. Pass `--text '...'` to override with text or `--state-json state.json` for structured state. If neither the command nor recipe provides state, the CLI reads stdin. It prints the complete TypeSafe response as JSON.
+The recipe contains a `questions` object, optional `model`, and optional `state`. Pass `--text '...'` to override with text or `--state-json state.json` (`-j state.json`) for structured state. If neither the command nor recipe provides state, the CLI reads stdin. It prints the complete TypeSafe response as JSON.
 
 Run `klassify mcp` for a stdio MCP server. It exposes one `classify` tool with `state`, `questions`, and optional `model` arguments. The tool returns the full TypeSafe response as structured content. MCP clients should launch the executable with `TYPESAFE_API_KEY` in its environment; stdout is reserved for protocol messages.
 
@@ -68,7 +68,7 @@ For a JVM or Android project, add the JitPack repository and SDK dependency:
 
 ```kotlin
 repositories { maven("https://jitpack.io") }
-dependencies { implementation("com.github.fajarnuha:klassify:v0.1.0") }
+dependencies { implementation("com.github.fajarnuha:klassify:v0.1.1") }
 ```
 
 In a recent Gradle project, put the repository in `dependencyResolutionManagement.repositories` in `settings.gradle.kts`. JitPack serves the JVM variant of `klassify-sdk` at the repository coordinate above. Native consumers need a repository carrying the native variants.

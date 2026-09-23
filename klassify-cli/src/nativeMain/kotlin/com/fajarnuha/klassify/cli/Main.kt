@@ -39,16 +39,16 @@ import platform.posix.stdin
 import platform.posix.stdout
 import kotlin.system.exitProcess
 
-private const val VERSION = "0.1.0"
+private const val VERSION = "0.1.1"
 
 private class Klassify : CliktCommand(name = "klassify") {
     override fun run() = Unit
 }
 
-private class Classify : CliktCommand(name = "classify") {
+private class Run : CliktCommand(name = "run") {
     private val recipe by option("--recipe", "-r", help = "JSON recipe file").required()
     private val text by option("--text", "-t", help = "Text state; defaults to recipe state or stdin")
-    private val stateJson by option("--state-json", help = "JSON state file")
+    private val stateJson by option("--state-json", "-j", help = "JSON state file")
     private val apiKey by option("--api-key", help = "TypeSafe API key; defaults to TYPESAFE_API_KEY")
     private val model by option("--model", help = "Override the recipe model")
 
@@ -213,7 +213,7 @@ private fun writeLine(text: String) {
 
 fun main(args: Array<String>) {
     try {
-        Klassify().subcommands(Classify(), Mcp()).main(args)
+        Klassify().subcommands(Run(), Mcp()).main(args)
     } catch (e: Exception) {
         Terminal().danger(e.message ?: "Klassify failed", stderr = true)
         exitProcess(1)
