@@ -41,7 +41,6 @@ suspend fun classifyPet(apiKey: String) {
 
 The property name becomes the Jev question ID. For a `choice` question, enum names become options. `result[species]` contains the selected value, confidence, and option probabilities. Pass a `JsonElement` to `evaluate` for structured state. JSON recipes and MCP requests use the [TypeSafe HTTP format](https://docs.typesafe.ai/api).
 
-
 ## CLI
 
 Install on macOS with Homebrew:
@@ -68,13 +67,6 @@ klassify run --recipe examples/pet.json --text "A gentle cat that likes children
 
 `--text` replaces the sample state in the recipe. The CLI prints one JSON object. Look under `answers` for `species.choice` (the pet type), `childFriendly.noul` (a probability from 0 to 1), and `energy.score` (an activity score).
 
-To run from source on Apple Silicon, set `TYPESAFE_API_KEY` and build the CLI:
-
-```sh
-DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer ./gradlew :klassify-cli:linkDebugExecutableMacosArm64
-./klassify-cli/build/bin/macosArm64/debugExecutable/klassify.kexe run --recipe examples/pet.json
-```
-
 The recipe needs a `questions` object and can include `model` or `state`. Override its state with `--text '...'` or `--state-json state.json` (short form: `-j state.json`). If neither the command nor the recipe supplies state, the CLI reads stdin. It prints the TypeSafe response as JSON.
 
 Run `klassify mcp` to start an MCP server over stdio. Its `classify` tool takes `state` and `questions`, plus an optional `model`. The tool returns the TypeSafe response as structured content. Set `TYPESAFE_API_KEY` in the MCP client's environment. The server reserves stdout for protocol messages.
@@ -90,7 +82,16 @@ dependencies { implementation("com.github.fajarnuha:klassify:v0.1.2") }
 
 If your project uses `dependencyResolutionManagement`, add JitPack in `settings.gradle.kts`. This dependency resolves the JVM variant of `klassify-sdk`. Native consumers need a repository that publishes the native variants.
 
-## Build and test on macOS
+## Build from source
+
+On Apple Silicon, set `TYPESAFE_API_KEY` and build the CLI:
+
+```sh
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer ./gradlew :klassify-cli:linkDebugExecutableMacosArm64
+./klassify-cli/build/bin/macosArm64/debugExecutable/klassify.kexe run --recipe examples/pet.json
+```
+
+To run SDK tests and compile the CLI on macOS:
 
 ```sh
 ./gradlew :klassify-sdk:jvmTest :klassify-cli:compileKotlinMacosArm64
