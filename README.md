@@ -1,8 +1,11 @@
 # Klassify
 
-Kotlin Multiplatform DSL and SDK for System One classification, starting with TypeSafe Jev. The repository follows the Gradle module layout of [kson](https://github.com/fajarnuha/kson): a reusable library and a Kotlin/Native CLI.
+`klassify` is a Kotlin Multiplatform SDK and DSL for System One classification, starting with TypeSafe Jev.
 
-Licensed under Apache 2.0.
+## Modules
+
+- `klassify-sdk`: Kotlin DSL, Ktor HTTP client, coroutine `suspend` functions, and typed answers. Targets JVM, macOS, Linux, Windows, and iOS.
+- `klassify-cli`: Kotlin/Native executable for classification tasks and MCP. Targets macOS, Linux, and Windows.
 
 ## Kotlin DSL
 
@@ -36,53 +39,61 @@ suspend fun classifyPet(apiKey: String) {
 }
 ```
 
-The delegated property name becomes the Jev question ID. Enum entry names become Choice options; `result[species]` returns an enum value with confidence and probabilities. `evaluate` also accepts a `JsonElement` state, such as `buildJsonObject { ... }`. JSON recipes and MCP requests use the same [TypeSafe HTTP format](https://docs.typesafe.ai/api).
+The property name becomes the Jev question ID. For a `choice` question, enum names become options. `result[species]` contains the selected value, confidence, and option probabilities. Pass a `JsonElement` to `evaluate` for structured state. JSON recipes and MCP requests use the [TypeSafe HTTP format](https://docs.typesafe.ai/api).
 
-## Modules
-
-- `klassify-sdk`: common Kotlin DSL, Ktor client, coroutine based `suspend` evaluation, and typed answers. Targets JVM, macOS, Linux, Windows, and iOS.
-- `klassify-cli`: Kotlin/Native executable using Clikt and Mordant. Targets macOS, Linux, and Windows.
 
 ## CLI
 
-Install the macOS CLI with Homebrew:
+Install on macOS with Homebrew:
 
 ```sh
 brew install fajarnuha/tools/klassify
 ```
 
-On Linux (x64 or ARM64, glibc), install the latest release to `~/.local/bin`:
+On glibc-based Linux (x64 or ARM64), install the latest release:
 
 ```sh
 curl -fsSL https://github.com/fajarnuha/klassify/releases/latest/download/install.sh | sh
 ```
 
-The installer verifies the archive's SHA-256 checksum before installing. To inspect it first, download `install.sh` from the [latest release](https://github.com/fajarnuha/klassify/releases/latest) and run `sh install.sh`. Set `KLASSIFY_INSTALL_DIR` to choose another directory. Ensure the directory is in your `PATH`.
+The installer checks the archive's SHA-256 checksum and puts `klassify` in `~/.local/bin`. To review the script first, download `install.sh` from the [latest release](https://github.com/fajarnuha/klassify/releases/latest), then run `sh install.sh`. Set `KLASSIFY_INSTALL_DIR` to install elsewhere. Make sure the install directory is in your `PATH`.
 
-Or set `TYPESAFE_API_KEY`, then build and run on this Mac:
+### Try it
+
+From a checkout of this repository, set `TYPESAFE_API_KEY` and run the included [pet recipe](examples/pet.json):
+
+```sh
+klassify run --recipe examples/pet.json --text "A gentle cat that likes children and naps all day."
+```
+
+`--text` replaces the sample state in the recipe. The CLI prints one JSON object. Look under `answers` for `species.choice` (the pet type), `childFriendly.noul` (a probability from 0 to 1), and `energy.score` (an activity score).
+
+To run from source on Apple Silicon, set `TYPESAFE_API_KEY` and build the CLI:
 
 ```sh
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer ./gradlew :klassify-cli:linkDebugExecutableMacosArm64
 ./klassify-cli/build/bin/macosArm64/debugExecutable/klassify.kexe run --recipe examples/pet.json
 ```
 
-The recipe contains a `questions` object, optional `model`, and optional `state`. Pass `--text '...'` to override with text or `--state-json state.json` (`-j state.json`) for structured state. If neither the command nor recipe provides state, the CLI reads stdin. It prints the complete TypeSafe response as JSON.
+The recipe needs a `questions` object and can include `model` or `state`. Override its state with `--text '...'` or `--state-json state.json` (short form: `-j state.json`). If neither the command nor the recipe supplies state, the CLI reads stdin. It prints the TypeSafe response as JSON.
 
-Run `klassify mcp` for a stdio MCP server. It exposes one `classify` tool with `state`, `questions`, and optional `model` arguments. The tool returns the full TypeSafe response as structured content. MCP clients should launch the executable with `TYPESAFE_API_KEY` in its environment; stdout is reserved for protocol messages.
+Run `klassify mcp` to start an MCP server over stdio. Its `classify` tool takes `state` and `questions`, plus an optional `model`. The tool returns the TypeSafe response as structured content. Set `TYPESAFE_API_KEY` in the MCP client's environment. The server reserves stdout for protocol messages.
 
 ## JitPack
 
-For a JVM or Android project, add the JitPack repository and SDK dependency:
+Add JitPack and the SDK to a JVM or Android project:
 
 ```kotlin
 repositories { maven("https://jitpack.io") }
 dependencies { implementation("com.github.fajarnuha:klassify:v0.1.2") }
 ```
 
-In a recent Gradle project, put the repository in `dependencyResolutionManagement.repositories` in `settings.gradle.kts`. JitPack serves the JVM variant of `klassify-sdk` at the repository coordinate above. Native consumers need a repository carrying the native variants.
+If your project uses `dependencyResolutionManagement`, add JitPack in `settings.gradle.kts`. This dependency resolves the JVM variant of `klassify-sdk`. Native consumers need a repository that publishes the native variants.
 
-## Verify
+## Build and test on macOS
 
 ```sh
 ./gradlew :klassify-sdk:jvmTest :klassify-cli:compileKotlinMacosArm64
 ```
+
+Licensed under the [Apache License 2.0](LICENSE).
