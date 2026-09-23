@@ -5,6 +5,8 @@ import com.fajarnuha.klassify.TypeSafeClient
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.main
 import com.github.ajalt.clikt.core.subcommands
+import com.github.ajalt.clikt.parameters.arguments.argument
+import com.github.ajalt.clikt.parameters.arguments.optional
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
 import com.github.ajalt.mordant.terminal.Terminal
@@ -46,7 +48,8 @@ private class Klassify : CliktCommand(name = "klassify") {
 }
 
 private class Run : CliktCommand(name = "run") {
-    private val recipe by option("--recipe", "-r", help = "JSON recipe file").required()
+    private val recipeName by argument("recipe", help = "Recipe name in KLASSIFY_WORKDIR").optional()
+    private val recipe by option("--recipe", "-r", help = "JSON recipe path")
     private val text by option("--text", "-t", help = "Text state; defaults to recipe state or stdin")
     private val stateJson by option("--state-json", "-j", help = "JSON state file")
     private val apiKey by option("--api-key", help = "TypeSafe API key; defaults to TYPESAFE_API_KEY")
@@ -55,7 +58,7 @@ private class Run : CliktCommand(name = "run") {
     @OptIn(ExperimentalForeignApi::class)
     override fun run() {
         require(text == null || stateJson == null) { "Use either --text or --state-json" }
-        val recipeObject = Json.parseToJsonElement(readFile(recipe)).jsonObject
+        val recipeObject = Json.parseToJsonElement(readFile(resolveRecipePath(recipe, recipeName))).jsonObject
         val questions = QuestionSet.fromJson(recipeObject.getValue("questions").jsonObject)
         val state: JsonElement = when {
             text != null -> JsonPrimitive(text!!)
@@ -68,6 +71,32 @@ private class Run : CliktCommand(name = "run") {
         try {
             val result = runBlocking { client.evaluate(state, questions, selectedModel) }
             writeLine(result.json.toString())
+        } finally {
+            client.close()
+        }
+    }
+}
+
+private class Noul : CliktCommand(name = "noul") {
+    private val question by option("--question", "-q", help = "Yes/no question").required()
+    private val apiKey by option("--api-key", help = "TypeSafe API key; defaults to TYPESAFE_API_KEY")
+    private val model by option("--model", help = "TypeSafe model; defaults to jev-latest")
+
+    override fun run() {
+        val questions = QuestionSet.fromJson(buildJsonObject {
+            put("noul_question", buildJsonObject {
+                put("type", "noul")
+                put("instructions", question)
+                put("criteria", buildJsonObject {
+                    put("true", "")
+                    put("false", "")
+                })
+            })
+        })
+        val client = TypeSafeClient(apiKey ?: environmentKey())
+        try {
+            val result = runBlocking { client.evaluate(buildJsonObject { }, questions, model ?: "jev-latest") }
+            writeLine(result.noul("noul_question").probability.toString())
         } finally {
             client.close()
         }
@@ -174,6 +203,19 @@ private fun environmentKey(): String = getenv("TYPESAFE_API_KEY")?.toKString()
     ?: error("Set TYPESAFE_API_KEY or pass --api-key")
 
 @OptIn(ExperimentalForeignApi::class)
+private fun resolveRecipePath(path: String?, name: String?): String {
+    require((path == null) != (name == null)) { "Pass a recipe name or --recipe path, not both" }
+    if (path != null) return path
+    val workdir = getenv("KLASSIFY_WORKDIR")?.toKString()?.takeIf(String::isNotBlank)
+    require(name!!.isNotBlank() && name != "." && name != ".." && '/' !in name && '\\' !in name) {
+        "Recipe name must not contain a path"
+    }
+    val dir = workdir ?: error("Set KLASSIFY_WORKDIR to use a recipe name")
+    val file = if (name.endsWith(".json")) name else "$name.json"
+    return "${dir.trimEnd('/', '\\')}/$file"
+}
+
+@OptIn(ExperimentalForeignApi::class)
 private fun readFile(path: String): String {
     val file = fopen(path, "rb") ?: error("Cannot open $path")
     try { return readAll(file) } finally { fclose(file) }
@@ -213,7 +255,7 @@ private fun writeLine(text: String) {
 
 fun main(args: Array<String>) {
     try {
-        Klassify().subcommands(Run(), Mcp()).main(args)
+        Klassify().subcommands(Run(), Noul(), Mcp()).main(args)
     } catch (e: Exception) {
         Terminal().danger(e.message ?: "Klassify failed", stderr = true)
         exitProcess(1)

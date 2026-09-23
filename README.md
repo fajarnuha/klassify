@@ -67,7 +67,22 @@ klassify run --recipe examples/pet.json --text "A gentle cat that likes children
 
 `--text` replaces the sample state in the recipe. The CLI prints one JSON object. Look under `answers` for `species.choice` (the pet type), `childFriendly.noul` (a probability from 0 to 1), and `energy.score` (an activity score).
 
+For a single yes/no question, use `noul`. It needs no recipe and prints the probability of true, from 0 to 1:
+
+```sh
+klassify noul -q "Is a tomato a fruit?"
+```
+
 The recipe needs a `questions` object and can include `model` or `state`. Override its state with `--text '...'` or `--state-json state.json` (short form: `-j state.json`). If neither the command nor the recipe supplies state, the CLI reads stdin. It prints the TypeSafe response as JSON.
+
+To run a recipe from any directory, put `abc.json` in a folder and set `KLASSIFY_WORKDIR` to that folder:
+
+```sh
+export KLASSIFY_WORKDIR="$HOME/klassify-recipes"
+klassify run abc -t "Text to classify"
+```
+
+`--recipe abc.json` reads from the current directory. Use `--recipe path/to/abc.json` for another location; `--recipe` never searches `KLASSIFY_WORKDIR`.
 
 Run `klassify mcp` to start an MCP server over stdio. Its `classify` tool takes `state` and `questions`, plus an optional `model`. The tool returns the TypeSafe response as structured content. Set `TYPESAFE_API_KEY` in the MCP client's environment. The server reserves stdout for protocol messages.
 

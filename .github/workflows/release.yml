@@ -58,6 +58,17 @@ jobs:
           done
           dist/x64/klassify --help
           dist/x64/klassify run --help
+          dist/x64/klassify noul --help
+          if output="$(KLASSIFY_WORKDIR="$PWD/examples" dist/x64/klassify run pet -t test --model '' --api-key test 2>&1)"; then
+            echo "Expected model validation error" >&2
+            exit 1
+          fi
+          [[ "$output" == *"Model cannot be blank"* ]]
+          if output="$(KLASSIFY_WORKDIR="$PWD/examples" dist/x64/klassify run --recipe pet.json -t test --model '' --api-key test 2>&1)"; then
+            echo "Expected missing recipe error" >&2
+            exit 1
+          fi
+          [[ "$output" == *"Cannot open pet.json"* ]]
       - uses: actions/upload-artifact@v4
         with:
           name: release-linux
@@ -78,6 +89,7 @@ jobs:
           KLASSIFY_BASE_URL="file://$PWD" KLASSIFY_INSTALL_DIR="$RUNNER_TEMP/klassify-install" sh install.sh
           "$RUNNER_TEMP/klassify-install/klassify" --help
           "$RUNNER_TEMP/klassify-install/klassify" run --help
+          "$RUNNER_TEMP/klassify-install/klassify" noul --help
 
   release:
     needs: [macos, linux, linux-arm64]
