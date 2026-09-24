@@ -84,6 +84,46 @@ klassify run abc -t "Text to classify"
 
 `--recipe abc.json` reads from the current directory. Use `--recipe path/to/abc.json` for another location; `--recipe` never searches `KLASSIFY_WORKDIR`.
 
+Save one reusable Noul question and evaluate different text against it:
+
+```sh
+klassify noul set -q "Is this a fruit?"
+klassify noul -t "A tomato"
+```
+
+`set` creates the config folder as needed and saves `noul.json`. It replaces the previous saved question and does not call TypeSafe. `noul -t` prints the probability of true. By default the file is in `~/Library/Application Support/klassify` on macOS, `${XDG_CONFIG_HOME:-$HOME/.config}/klassify` on Linux, or `%APPDATA%\klassify` on Windows. Set `KLASSIFY_WORKDIR` to save it in that folder instead.
+
+Use `--field` when a script needs one answer instead of the full response:
+
+```sh
+klassify run --recipe examples/pet.json -t "A quiet cat" --field answers.species.choice
+```
+
+Check a recipe without making an API request:
+
+```sh
+klassify recipe check --recipe examples/pet.json
+```
+
+For several states, `batch` reads JSONL. Each line needs an `id` and a `state` string or JSON value:
+
+```sh
+printf '%s\n' \
+  '{"id":"a","state":"A playful terrier"}' \
+  '{"id":"b","state":"A quiet cat"}' |
+  klassify batch --recipe examples/pet.json --output results.jsonl
+```
+
+The output has one line per nonblank input line, with the same `id` and either `result` or `error`. Batch exits nonzero if any line fails. It runs requests one at a time. `--output` replaces an existing file.
+
+To compare a recipe with labeled data, put cases like this in `cases.jsonl`:
+
+```json
+{"state":"A playful terrier that loves children","expected":{"species":"DOG","childFriendly":true,"energy":2}}
+```
+
+Then run `klassify eval --recipe examples/pet.json --cases cases.jsonl`. Choice labels are option names, Noul labels are booleans, and Score labels are numbers on the recipe's zero-based scale. The summary reports accuracy for Choice and Noul, and mean absolute error for Score. `--threshold` changes the Noul true cutoff from its default of 0.5.
+
 Run `klassify mcp` to start an MCP server over stdio. Its `classify` tool takes `state` and `questions`, plus an optional `model`. The tool returns the TypeSafe response as structured content. Set `TYPESAFE_API_KEY` in the MCP client's environment. The server reserves stdout for protocol messages.
 
 ## JitPack

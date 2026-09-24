@@ -17,7 +17,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
-      - run: ./gradlew :klassify-sdk:jvmTest :klassify-cli:linkReleaseExecutableMacosArm64 :klassify-cli:linkReleaseExecutableMacosX64 --console=plain
+      - run: ./gradlew :klassify-sdk:jvmTest :klassify-cli:macosArm64Test :klassify-cli:linkReleaseExecutableMacosArm64 :klassify-cli:linkReleaseExecutableMacosX64 --console=plain
       - name: Package macOS binaries
         shell: bash
         run: |
@@ -58,7 +58,27 @@ jobs:
           done
           dist/x64/klassify --help
           dist/x64/klassify run --help
+          dist/x64/klassify batch --help
+          dist/x64/klassify eval --help
+          dist/x64/klassify recipe check --recipe examples/pet.json
+          if output="$(printf '%s\n' '{"id":"a","state":null}' | dist/x64/klassify batch --recipe examples/pet.json --api-key test 2>&1)"; then
+            echo "Expected invalid batch row" >&2
+            exit 1
+          fi
+          [[ "$output" == *'"id":"a","error":'* ]]
+          if output="$(printf '%s\n' '{"state":"test","expected":{"species":"INVALID"}}' | dist/x64/klassify eval --recipe examples/pet.json --cases - --api-key test 2>&1)"; then
+            echo "Expected invalid evaluation label" >&2
+            exit 1
+          fi
+          [[ "$output" == *"Invalid choice label 'species'"* ]]
           dist/x64/klassify noul --help
+          mkdir -p "$RUNNER_TEMP/klassify-recipes"
+          KLASSIFY_WORKDIR="$RUNNER_TEMP/klassify-recipes" dist/x64/klassify noul set -q "Is this a fruit?"
+          if output="$(KLASSIFY_WORKDIR="$RUNNER_TEMP/klassify-recipes" dist/x64/klassify noul -t tomato --model '' --api-key test 2>&1)"; then
+            echo "Expected model validation error" >&2
+            exit 1
+          fi
+          [[ "$output" == *"Model cannot be blank"* ]]
           if output="$(KLASSIFY_WORKDIR="$PWD/examples" dist/x64/klassify run pet -t test --model '' --api-key test 2>&1)"; then
             echo "Expected model validation error" >&2
             exit 1
