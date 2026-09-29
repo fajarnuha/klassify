@@ -132,7 +132,7 @@ Add JitPack and the SDK to a JVM or Android project:
 
 ```kotlin
 repositories { maven("https://jitpack.io") }
-dependencies { implementation("com.github.fajarnuha:klassify:v0.1.3") }
+dependencies { implementation("com.fajarnuha.klassify:klassify-sdk:0.2.0") }
 ```
 
 If your project uses `dependencyResolutionManagement`, add JitPack in `settings.gradle.kts`. This dependency resolves the JVM variant of `klassify-sdk`. Native consumers need a repository that publishes the native variants.

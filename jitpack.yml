@@ -1,4 +1,4 @@
 jdk:
   - openjdk21
 install:
-  - ./gradlew :klassify-sdk:publishJvmPublicationToMavenLocal -PGROUP="${GROUP}.${ARTIFACT}" -PVERSION_NAME="$VERSION"
+  - ./gradlew :klassify-sdk:publishKotlinMultiplatformPublicationToMavenLocal :klassify-sdk:publishJvmPublicationToMavenLocal -PVERSION_NAME="$VERSION"

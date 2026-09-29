@@ -3,6 +3,6 @@ plugins {
 }
 
 allprojects {
-    group = providers.gradleProperty("GROUP").getOrElse("com.fajarnuha.klassify")
-    version = providers.gradleProperty("VERSION_NAME").getOrElse("0.1.3")
+    group = "com.fajarnuha.klassify"
+    version = providers.gradleProperty("VERSION_NAME").getOrElse("0.2.0")
 }
