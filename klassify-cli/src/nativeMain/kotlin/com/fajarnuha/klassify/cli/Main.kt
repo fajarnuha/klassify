@@ -46,7 +46,6 @@ import platform.posix.fopen
 import platform.posix.fputs
 import platform.posix.fread
 import platform.posix.getenv
-import platform.posix.mkdir
 import platform.posix.access
 import platform.posix.F_OK
 import platform.posix.stdin
@@ -402,11 +401,13 @@ private fun createDirectories(path: String) {
             current.endsWith('/') -> "$current$part"
             else -> "$current/$part"
         }
-        if (mkdir(current, 448.convert()) != 0) {
+        if (makeDirectory(current) != 0) {
             check(access(current, F_OK) == 0) { "Cannot create directory $current" }
         }
     }
 }
+
+internal expect fun makeDirectory(path: String): Int
 
 private data class RecipeSpec(val questions: QuestionSet, val model: String, val state: JsonElement?)
 
