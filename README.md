@@ -1,6 +1,6 @@
 # Klassify
 
-`klassify` is a Kotlin Multiplatform SDK and DSL for System One classification, starting with TypeSafe Jev.
+`klassify` is a Kotlin Multiplatform SDK and DSL for TypeSafe Jev classification, directly or through OpenRouter.
 
 ## Modules
 
@@ -40,6 +40,17 @@ suspend fun classifyPet(apiKey: String) {
 ```
 
 The property name becomes the Jev question ID. For a `choice` question, enum names become options. `result[species]` contains the selected value, confidence, and option probabilities. Pass a `JsonElement` to `evaluate` for structured state. JSON recipes and MCP requests use the [TypeSafe HTTP format](https://docs.typesafe.ai/api).
+
+Both `TypeSafeClient` and `OpenRouterClient` implement `ClassificationClient`, with the same `evaluate` overloads and typed results:
+
+```kotlin
+import com.fajarnuha.klassify.ClassificationClient
+import com.fajarnuha.klassify.OpenRouterClient
+
+val client: ClassificationClient = OpenRouterClient(openRouterApiKey)
+```
+
+`OpenRouterClient` uses the [OpenRouter Decisions API](https://openrouter.ai/blog/tutorials/how-to-use-jev/) with `typesafe/jev-1.13` by default. `TypeSafeClient` defaults to `jev-latest`. Pass `model` when evaluating a `QuestionSet` to override either default. Both clients retry HTTP 429 and 529 up to three attempts and close their supplied Ktor client when `close()` is called. HTTP failures throw `OpenRouterException` or `TypeSafeException`, each with `status` and `responseBody`.
 
 ## CLI
 

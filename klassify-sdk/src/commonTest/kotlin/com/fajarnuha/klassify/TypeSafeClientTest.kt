@@ -40,7 +40,7 @@ class TypeSafeClientTest {
                 HttpStatusCode.OK,
             )
         })
-        val client = TypeSafeClient("test", http)
+        val client: ClassificationClient = TypeSafeClient("test", http)
         try {
             val result = client.evaluate("Charged twice!", team, urgent, frustration)
             assertEquals(Team.BILLING, result[team].value)
