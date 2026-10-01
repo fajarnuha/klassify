@@ -9,6 +9,7 @@ import com.github.ajalt.clikt.parameters.arguments.argument
 import com.github.ajalt.clikt.parameters.arguments.optional
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
+import com.github.ajalt.clikt.parameters.options.versionOption
 import com.github.ajalt.mordant.terminal.Terminal
 import com.github.ajalt.mordant.terminal.danger
 import kotlinx.coroutines.runBlocking
@@ -52,9 +53,8 @@ import platform.posix.stdin
 import platform.posix.stdout
 import kotlin.system.exitProcess
 
-private const val VERSION = "0.2.0"
-
-private class Klassify : CliktCommand(name = "klassify") {
+internal class Klassify : CliktCommand(name = "klassify") {
+    init { versionOption(VERSION, names = setOf("-v", "--version")) }
     override fun run() = Unit
 }
 

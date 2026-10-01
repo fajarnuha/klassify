@@ -1,5 +1,6 @@
 package com.fajarnuha.klassify.cli
 
+import com.github.ajalt.clikt.testing.test
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
@@ -8,6 +9,15 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class MainTest {
+    @Test
+    fun versionOptions() {
+        for (flag in listOf("-v", "--version")) {
+            val result = Klassify().test(flag)
+            assertEquals(0, result.statusCode)
+            assertEquals("klassify version $VERSION\n", result.stdout)
+        }
+    }
+
     @Test
     fun fieldSelectionAndEvaluationMetrics() {
         val result = Json.parseToJsonElement("""{

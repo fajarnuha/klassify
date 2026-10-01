@@ -43,6 +43,8 @@ The property name becomes the Jev question ID. For a `choice` question, enum nam
 
 ## CLI
 
+Run `klassify -v` or `klassify --version` to print the installed version.
+
 Install on macOS with Homebrew:
 
 ```sh
@@ -138,6 +140,18 @@ dependencies { implementation("com.fajarnuha.klassify:klassify-sdk:0.2.0") }
 If your project uses `dependencyResolutionManagement`, add JitPack in `settings.gradle.kts`. This dependency resolves the JVM variant of `klassify-sdk`. Native consumers need a repository that publishes the native variants.
 
 ## Build from source
+
+`VERSION_NAME` in `gradle.properties` sets the SDK, CLI, and MCP server version.
+To upgrade it, run one of these commands, then build in a separate Gradle invocation:
+
+```sh
+./gradlew bumpVersion                      # Minor by default: 0.2.0 -> 0.3.0
+./gradlew bumpVersion -PversionBump=patch   # 0.2.0 -> 0.2.1
+./gradlew bumpVersion -PversionBump=major   # 0.2.0 -> 1.0.0
+```
+
+The task resets lower version components to zero. It does not commit or create a Git tag.
+Run `python3 scripts/test-versioning.py` to check the task in a temporary project.
 
 On Apple Silicon, set `TYPESAFE_API_KEY` and build the CLI:
 
