@@ -139,16 +139,16 @@ Then run `klassify eval --recipe examples/pet.json --cases cases.jsonl`. Choice 
 
 Run `klassify mcp` to start an MCP server over stdio. Its `classify` tool takes `state` and `questions`, plus an optional `model`. The tool returns the TypeSafe response as structured content. Set `TYPESAFE_API_KEY` in the MCP client's environment. The server reserves stdout for protocol messages.
 
-## JitPack
+## Add the SDK
 
-Add JitPack and the SDK to a JVM or Android project:
+Add Maven Central to your Gradle repositories and use the SDK in a JVM, Android, or Kotlin Multiplatform project:
 
 ```kotlin
-repositories { maven("https://jitpack.io") }
-dependencies { implementation("com.fajarnuha.klassify:klassify-sdk:0.2.0") }
+repositories { mavenCentral() }
+dependencies { implementation("com.fajarnuha.klassify:klassify-sdk:0.3.0") }
 ```
 
-If your project uses `dependencyResolutionManagement`, add JitPack in `settings.gradle.kts`. This dependency resolves the JVM variant of `klassify-sdk`. Native consumers need a repository that publishes the native variants.
+If your project uses `dependencyResolutionManagement`, add `mavenCentral()` in `settings.gradle.kts`. For Kotlin Multiplatform, declare the dependency in the source set you want to use, such as `commonMain`.
 
 ## Build from source
 
