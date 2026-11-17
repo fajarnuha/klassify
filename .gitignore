@@ -6,3 +6,5 @@ local.properties
 *.kexe
 *.exe
 .DS_Store
+
+.env

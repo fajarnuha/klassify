@@ -1,6 +1,6 @@
 # Klassify
 
-`klassify` is a Kotlin Multiplatform SDK and DSL for TypeSafe Jev classification, directly or through OpenRouter.
+`klassify` is a Kotlin Multiplatform SDK and DSL for typed decisions over text, images, and JSON. It supports TypeSafe Jev, OpenRouter, OpenAI, and Google Gemini.
 
 ## Modules
 
@@ -41,16 +41,37 @@ suspend fun classifyPet(apiKey: String) {
 
 The property name becomes the Jev question ID. For a `choice` question, enum names become options. `result[species]` contains the selected value, confidence, and option probabilities. Pass a `JsonElement` to `evaluate` for structured state. JSON recipes and MCP requests use the [TypeSafe HTTP format](https://docs.typesafe.ai/api).
 
-Both `TypeSafeClient` and `OpenRouterClient` implement `ClassificationClient`, with the same `evaluate` overloads and typed results:
+All four SDK clients implement `ClassificationClient` and return the same typed Noul, Choice, and Score answers.
+
+| Client | Default model | API |
+| --- | --- | --- |
+| `TypeSafeClient` | `jev-latest` | [TypeSafe System One](https://docs.typesafe.ai/api) |
+| `OpenRouterClient` | `typesafe/jev-1.13` | [OpenRouter Decisions](https://openrouter.ai/docs/guides/community/multimodal-decisions) |
+| `OpenAIClient` | `gpt-6-luna` | [OpenAI Decisions](https://developers.openai.com/api/docs/guides/decisions) |
+| `GoogleClient` | `gemini-decision-1` | [Gemini Decisions](https://ai.google.dev/api/decisions) |
+
+Pass your provider's API key to its client constructor. Pass `model` when evaluating a `QuestionSet` to override the default, for example with `google/gemini-decision-1` or `openai/gpt-6-luna-decisions` on OpenRouter. Clients retry HTTP 429 and 529 up to three attempts and close their supplied Ktor client when `close()` is called. HTTP failures throw the provider-specific exception with `status` and `responseBody`.
+
+### Image input
+
+Use `imageInput` with encoded PNG or JPEG bytes. Pass the image directly for an image-only decision, or place one or more images in a top-level JSON array alongside text.
 
 ```kotlin
 import com.fajarnuha.klassify.ClassificationClient
-import com.fajarnuha.klassify.OpenRouterClient
+import com.fajarnuha.klassify.imageInput
+import com.fajarnuha.klassify.noul
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
 
-val client: ClassificationClient = OpenRouterClient(openRouterApiKey)
+suspend fun collarProbability(client: ClassificationClient, photoBytes: ByteArray): Double {
+    val hasCollar by noul("Is the dog wearing a collar?")
+    val photo = imageInput(photoBytes, "image/jpeg")
+    val input = JsonArray(listOf(JsonPrimitive("Inspect the dog in this photo."), photo))
+    return client.evaluate(input, hasCollar)[hasCollar].probability
+}
 ```
 
-`OpenRouterClient` uses the [OpenRouter Decisions API](https://openrouter.ai/blog/tutorials/how-to-use-jev/) with `typesafe/jev-1.13` by default. `TypeSafeClient` defaults to `jev-latest`. Pass `model` when evaluating a `QuestionSet` to override either default. Both clients retry HTTP 429 and 529 up to three attempts and close their supplied Ktor client when `close()` is called. HTTP failures throw `OpenRouterException` or `TypeSafeException`, each with `status` and `responseBody`.
+For JSON recipes or CLI `--state-json`, represent an image as `{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,..."}}`. TypeSafe image input is experimental. Its client sends the required opt-in header automatically. [TypeSafe image format and limits](https://docs.typesafe.ai/images)
 
 ## CLI
 
@@ -145,7 +166,7 @@ Add Maven Central to your Gradle repositories and use the SDK in a JVM, Android,
 
 ```kotlin
 repositories { mavenCentral() }
-dependencies { implementation("com.fajarnuha.klassify:klassify-sdk:0.3.0") }
+dependencies { implementation("com.fajarnuha.klassify:klassify-sdk:0.4.0") }
 ```
 
 If your project uses `dependencyResolutionManagement`, add `mavenCentral()` in `settings.gradle.kts`. For Kotlin Multiplatform, declare the dependency in the source set you want to use, such as `commonMain`.

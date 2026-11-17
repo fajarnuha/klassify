@@ -12,4 +12,5 @@ public class TypeSafeClient public constructor(
     endpoint: String = "https://api.typesafe.ai/v1/systemone",
 ) : ClassificationClient by SystemOneClient(
     apiKey, httpClient, endpoint, "jev-latest", "TypeSafe", ::TypeSafeException,
+    typeSafeImages = true,
 )
