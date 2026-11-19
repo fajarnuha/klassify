@@ -1,11 +1,117 @@
 # Klassify
 
-`klassify` is a Kotlin Multiplatform SDK and DSL for typed decisions over text, images, and JSON. It supports TypeSafe Jev, OpenRouter, OpenAI, and Google Gemini.
+Klassify classifies text, images, and JSON. The CLI uses TypeSafe Jev and runs on macOS, Linux, and Windows. The Kotlin Multiplatform SDK also supports OpenRouter, OpenAI, and Google Gemini. It uses Ktor and Kotlin coroutines and runs on JVM, macOS, Linux, Windows, and iOS.
 
-## Modules
+## CLI
 
-- `klassify-sdk`: Kotlin DSL, Ktor HTTP client, coroutine `suspend` functions, and typed answers. Targets JVM, macOS, Linux, Windows, and iOS.
-- `klassify-cli`: Kotlin/Native executable for classification tasks and MCP. Targets macOS, Linux, and Windows.
+### Install
+
+On macOS, install with Homebrew.
+
+```sh
+brew install fajarnuha/tools/klassify
+```
+
+On glibc-based Linux for x64 or ARM64, use the release installer.
+
+```sh
+curl -fsSL https://github.com/fajarnuha/klassify/releases/latest/download/install.sh | sh
+```
+
+The installer checks the archive's SHA-256 checksum and installs `klassify` in `~/.local/bin` by default. Set `KLASSIFY_INSTALL_DIR` to install elsewhere. Make sure that directory is in your `PATH`. If you want to read the script before running it, download `install.sh` from the [latest release](https://github.com/fajarnuha/klassify/releases/latest) and run `sh install.sh` after reviewing it.
+
+Run `klassify --version` or `klassify -v` to check the installed version.
+
+### Try it
+
+Set `TYPESAFE_API_KEY` to your TypeSafe API key. Download the example recipe into your current directory and run it with your own text.
+
+```sh
+curl -fL https://raw.githubusercontent.com/fajarnuha/klassify/main/examples/pet.json -o pet.json
+klassify run --recipe pet.json --text "A gentle cat that likes children and naps all day."
+```
+
+`--text` replaces the sample state in the recipe. The CLI prints a JSON object with an `answers` field. Look for the pet type in `species.choice`, the probability that the pet is friendly with children in `childFriendly.noul`, and the activity score in `energy.score`.
+
+Use `noul` to ask a yes-or-no question without a recipe. It prints the probability that the answer is true, from 0 to 1.
+
+```sh
+klassify noul -q "Is a tomato a fruit?"
+```
+
+### Run recipes
+
+A recipe needs a `questions` object and can also include `model` and `state`. Use `--text '...'` or `--state-json state.json` to override the recipe's state. Use `-j` as shorthand for `--state-json`. If neither the command nor the recipe supplies state, the CLI reads it from stdin. It prints the TypeSafe response as JSON.
+
+Pass a file path to `--recipe`. To run a recipe by name from any directory, put it in `KLASSIFY_WORKDIR` and pass its name without the `.json` extension.
+
+```sh
+export KLASSIFY_WORKDIR="$HOME/klassify-recipes"
+klassify run abc -t "Text to classify"
+```
+
+Use `--field` to print one value from the response.
+
+```sh
+klassify run --recipe pet.json -t "A quiet cat" --field answers.species.choice
+```
+
+Use `recipe check` to validate a recipe without making an API request.
+
+```sh
+klassify recipe check --recipe pet.json
+```
+
+### Run a batch or evaluate a recipe
+
+Use `batch` to run a recipe on several inputs. It reads JSON Lines. Each line needs an `id` and a `state`, which can be a string or another JSON value.
+
+```sh
+printf '%s\n' \
+  '{"id":"a","state":"A playful terrier"}' \
+  '{"id":"b","state":"A quiet cat"}' |
+  klassify batch --recipe pet.json --output results.jsonl
+```
+
+`batch` makes one request at a time and writes one result per nonblank input line. Each output line contains the input `id` and either `result` or `error`. The command exits with a nonzero status if any input fails. `--output` replaces an existing file.
+
+To evaluate a recipe against labeled data, add cases like this to `cases.jsonl`.
+
+```json
+{"state":"A playful terrier that loves children","expected":{"species":"DOG","childFriendly":true,"energy":2}}
+```
+
+Then run `klassify eval --recipe pet.json --cases cases.jsonl`. Use option names for Choice, booleans for Noul, and numbers on the recipe's zero-based scale for Score. The summary reports accuracy for Choice and Noul and mean absolute error for Score. Use `--threshold` to change the Noul cutoff from its default of 0.5.
+
+### Save a yes-or-no question
+
+Use `noul set` to save a question, then run `noul -t` with each input.
+
+```sh
+klassify noul set -q "Is this a fruit?"
+klassify noul -t "A tomato"
+```
+
+`noul set` creates the config directory as needed and writes `noul.json` without calling TypeSafe. It replaces the previously saved question. Use `KLASSIFY_WORKDIR` to choose where the CLI stores the file. The default directory depends on your operating system.
+
+- macOS uses `~/Library/Application Support/klassify`.
+- Linux uses `${XDG_CONFIG_HOME:-$HOME/.config}/klassify`.
+- Windows uses `%APPDATA%\klassify`.
+
+### Run an MCP server
+
+Run `klassify mcp` to start an MCP server over stdio. Its `classify` tool takes `state` and `questions`, plus an optional `model`. The tool returns the TypeSafe response as structured content. Set `TYPESAFE_API_KEY` in the MCP client's environment. The server reserves stdout for protocol messages.
+
+## Add the SDK
+
+Add Maven Central to your Gradle repositories and declare the SDK dependency.
+
+```kotlin
+repositories { mavenCentral() }
+dependencies { implementation("com.fajarnuha.klassify:klassify-sdk:0.4.0") }
+```
+
+If your project uses `dependencyResolutionManagement`, add `mavenCentral()` in `settings.gradle.kts`. For Kotlin Multiplatform, declare the dependency in the source set you want to use, such as `commonMain`.
 
 ## Kotlin DSL
 
@@ -39,7 +145,7 @@ suspend fun classifyPet(apiKey: String) {
 }
 ```
 
-The property name becomes the Jev question ID. For a `choice` question, enum names become options. `result[species]` contains the selected value, confidence, and option probabilities. Pass a `JsonElement` to `evaluate` for structured state. JSON recipes and MCP requests use the [TypeSafe HTTP format](https://docs.typesafe.ai/api).
+Klassify uses the property name as the question ID and the enum names as `choice` options. `result[species]` contains the selected value, its confidence, and the probability of each option. Pass a `JsonElement` to `evaluate` to classify structured data. JSON recipes and MCP requests use the [TypeSafe HTTP format](https://docs.typesafe.ai/api).
 
 All four SDK clients implement `ClassificationClient` and return the same typed Noul, Choice, and Score answers.
 
@@ -50,7 +156,7 @@ All four SDK clients implement `ClassificationClient` and return the same typed 
 | `OpenAIClient` | `gpt-6-luna` | [OpenAI Decisions](https://developers.openai.com/api/docs/guides/decisions) |
 | `GoogleClient` | `gemini-decision-1` | [Gemini Decisions](https://ai.google.dev/api/decisions) |
 
-Pass your provider's API key to its client constructor. Pass `model` when evaluating a `QuestionSet` to override the default, for example with `google/gemini-decision-1` or `openai/gpt-6-luna-decisions` on OpenRouter. Clients retry HTTP 429 and 529 up to three attempts and close their supplied Ktor client when `close()` is called. HTTP failures throw the provider-specific exception with `status` and `responseBody`.
+Pass your provider's API key to the client constructor. To change the model, pass `model` when you evaluate a `QuestionSet`. For example, OpenRouter accepts `google/gemini-decision-1` and `openai/gpt-6-luna-decisions`. The clients make up to three attempts on HTTP 429 or 529. If a request fails, the client throws a provider-specific exception with `status` and `responseBody`. Calling `close()` also closes the underlying Ktor client.
 
 ### Image input
 
@@ -72,130 +178,5 @@ suspend fun collarProbability(client: ClassificationClient, photoBytes: ByteArra
 ```
 
 For JSON recipes or CLI `--state-json`, represent an image as `{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,..."}}`. TypeSafe image input is experimental. Its client sends the required opt-in header automatically. [TypeSafe image format and limits](https://docs.typesafe.ai/images)
-
-## CLI
-
-Run `klassify -v` or `klassify --version` to print the installed version.
-
-Install on macOS with Homebrew:
-
-```sh
-brew install fajarnuha/tools/klassify
-```
-
-On glibc-based Linux (x64 or ARM64), install the latest release:
-
-```sh
-curl -fsSL https://github.com/fajarnuha/klassify/releases/latest/download/install.sh | sh
-```
-
-The installer checks the archive's SHA-256 checksum and puts `klassify` in `~/.local/bin`. To review the script first, download `install.sh` from the [latest release](https://github.com/fajarnuha/klassify/releases/latest), then run `sh install.sh`. Set `KLASSIFY_INSTALL_DIR` to install elsewhere. Make sure the install directory is in your `PATH`.
-
-### Try it
-
-From a checkout of this repository, set `TYPESAFE_API_KEY` and run the included [pet recipe](examples/pet.json):
-
-```sh
-klassify run --recipe examples/pet.json --text "A gentle cat that likes children and naps all day."
-```
-
-`--text` replaces the sample state in the recipe. The CLI prints one JSON object. Look under `answers` for `species.choice` (the pet type), `childFriendly.noul` (a probability from 0 to 1), and `energy.score` (an activity score).
-
-For a single yes/no question, use `noul`. It needs no recipe and prints the probability of true, from 0 to 1:
-
-```sh
-klassify noul -q "Is a tomato a fruit?"
-```
-
-The recipe needs a `questions` object and can include `model` or `state`. Override its state with `--text '...'` or `--state-json state.json` (short form: `-j state.json`). If neither the command nor the recipe supplies state, the CLI reads stdin. It prints the TypeSafe response as JSON.
-
-To run a recipe from any directory, put `abc.json` in a folder and set `KLASSIFY_WORKDIR` to that folder:
-
-```sh
-export KLASSIFY_WORKDIR="$HOME/klassify-recipes"
-klassify run abc -t "Text to classify"
-```
-
-`--recipe abc.json` reads from the current directory. Use `--recipe path/to/abc.json` for another location; `--recipe` never searches `KLASSIFY_WORKDIR`.
-
-Save one reusable Noul question and evaluate different text against it:
-
-```sh
-klassify noul set -q "Is this a fruit?"
-klassify noul -t "A tomato"
-```
-
-`set` creates the config folder as needed and saves `noul.json`. It replaces the previous saved question and does not call TypeSafe. `noul -t` prints the probability of true. By default the file is in `~/Library/Application Support/klassify` on macOS, `${XDG_CONFIG_HOME:-$HOME/.config}/klassify` on Linux, or `%APPDATA%\klassify` on Windows. Set `KLASSIFY_WORKDIR` to save it in that folder instead.
-
-Use `--field` when a script needs one answer instead of the full response:
-
-```sh
-klassify run --recipe examples/pet.json -t "A quiet cat" --field answers.species.choice
-```
-
-Check a recipe without making an API request:
-
-```sh
-klassify recipe check --recipe examples/pet.json
-```
-
-For several states, `batch` reads JSONL. Each line needs an `id` and a `state` string or JSON value:
-
-```sh
-printf '%s\n' \
-  '{"id":"a","state":"A playful terrier"}' \
-  '{"id":"b","state":"A quiet cat"}' |
-  klassify batch --recipe examples/pet.json --output results.jsonl
-```
-
-The output has one line per nonblank input line, with the same `id` and either `result` or `error`. Batch exits nonzero if any line fails. It runs requests one at a time. `--output` replaces an existing file.
-
-To compare a recipe with labeled data, put cases like this in `cases.jsonl`:
-
-```json
-{"state":"A playful terrier that loves children","expected":{"species":"DOG","childFriendly":true,"energy":2}}
-```
-
-Then run `klassify eval --recipe examples/pet.json --cases cases.jsonl`. Choice labels are option names, Noul labels are booleans, and Score labels are numbers on the recipe's zero-based scale. The summary reports accuracy for Choice and Noul, and mean absolute error for Score. `--threshold` changes the Noul true cutoff from its default of 0.5.
-
-Run `klassify mcp` to start an MCP server over stdio. Its `classify` tool takes `state` and `questions`, plus an optional `model`. The tool returns the TypeSafe response as structured content. Set `TYPESAFE_API_KEY` in the MCP client's environment. The server reserves stdout for protocol messages.
-
-## Add the SDK
-
-Add Maven Central to your Gradle repositories and use the SDK in a JVM, Android, or Kotlin Multiplatform project:
-
-```kotlin
-repositories { mavenCentral() }
-dependencies { implementation("com.fajarnuha.klassify:klassify-sdk:0.4.0") }
-```
-
-If your project uses `dependencyResolutionManagement`, add `mavenCentral()` in `settings.gradle.kts`. For Kotlin Multiplatform, declare the dependency in the source set you want to use, such as `commonMain`.
-
-## Build from source
-
-`VERSION_NAME` in `gradle.properties` sets the SDK, CLI, and MCP server version.
-To upgrade it, run one of these commands, then build in a separate Gradle invocation:
-
-```sh
-./gradlew bumpVersion                      # Minor by default: 0.2.0 -> 0.3.0
-./gradlew bumpVersion -PversionBump=patch   # 0.2.0 -> 0.2.1
-./gradlew bumpVersion -PversionBump=major   # 0.2.0 -> 1.0.0
-```
-
-The task resets lower version components to zero. It does not commit or create a Git tag.
-Run `python3 scripts/test-versioning.py` to check the task in a temporary project.
-
-On Apple Silicon, set `TYPESAFE_API_KEY` and build the CLI:
-
-```sh
-DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer ./gradlew :klassify-cli:linkDebugExecutableMacosArm64
-./klassify-cli/build/bin/macosArm64/debugExecutable/klassify.kexe run --recipe examples/pet.json
-```
-
-To run SDK tests and compile the CLI on macOS:
-
-```sh
-./gradlew :klassify-sdk:jvmTest :klassify-cli:compileKotlinMacosArm64
-```
 
 Licensed under the [Apache License 2.0](LICENSE).
