@@ -62,6 +62,20 @@ Use `recipe check` to validate a recipe without making an API request.
 klassify recipe check --recipe pet.json
 ```
 
+### Triage recipes
+
+From the repository root, run either recipe with its built-in sample. Set `TYPESAFE_API_KEY` before running.
+
+```sh
+klassify run --recipe examples/email-triage.json --field answers.category.choice
+klassify run --recipe examples/app-review-triage.json
+```
+
+- [Email triage](examples/email-triage.json) returns `spam`, `promo`, or `important` in `answers.category.choice`. The `important` label also covers ordinary legitimate inbox mail. For structured input, send `from`, `subject`, and `body` when available.
+- [App review triage](examples/app-review-triage.json) returns a feedback category in `answers.category.choice` and an impact-based priority in `answers.priority.choice`. Priority ranges from `low` through `normal`, `high`, and `urgent`. For structured input, send `text` and include `rating`, `appVersion`, and `platform` when available.
+
+Replace the sample with `--text '...'` or pass a JSON object for one email or review with `--state-json input.json`. For multiple items, use `batch` and put one email or review in each line's `state`.
+
 ### Run a batch or evaluate a recipe
 
 Use `batch` to run a recipe on several inputs. It reads JSON Lines. Each line needs an `id` and a `state`, which can be a string or another JSON value.

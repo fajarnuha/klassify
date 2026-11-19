@@ -57,6 +57,13 @@ jobs:
             tar -czf "klassify-linux-$arch.tar.gz" -C "dist/$arch" klassify LICENSE
           done
           dist/x64/klassify --help
+          for flag in -v --version; do
+            output="$(dist/x64/klassify "$flag")"
+            if [[ "$output" != "klassify version $GITHUB_REF_NAME" ]]; then
+              echo "Unexpected output for $flag: $output (expected klassify version $GITHUB_REF_NAME)" >&2
+              exit 1
+            fi
+          done
           dist/x64/klassify run --help
           dist/x64/klassify batch --help
           dist/x64/klassify eval --help
