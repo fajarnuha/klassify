@@ -10,7 +10,7 @@ Add Maven Central to your Gradle repositories and declare the SDK dependency.
 
 ```kotlin
 repositories { mavenCentral() }
-dependencies { implementation("com.fajarnuha.klassify:klassify-sdk:0.4.0") }
+dependencies { implementation("com.fajarnuha.klassify:klassify-sdk:0.5.0") }
 ```
 
 If your project uses `dependencyResolutionManagement`, add `mavenCentral()` in `settings.gradle.kts`. For Kotlin Multiplatform, declare the dependency in the source set you want to use, such as `commonMain`.
