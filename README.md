@@ -1,8 +1,89 @@
 # Klassify
 
-Klassify classifies text, images, and JSON. The CLI uses TypeSafe Jev and runs on macOS, Linux, and Windows. The Kotlin Multiplatform SDK also supports OpenRouter, OpenAI, and Google Gemini. It uses Ktor and Kotlin coroutines and runs on JVM, macOS, Linux, Windows, and iOS.
+Klassify is a Kotlin Multiplatform SDK for classifying text, images, and JSON. It returns typed answers and supports TypeSafe Jev, OpenRouter, OpenAI, and Google Gemini. It uses Ktor and Kotlin coroutines and runs on JVM, macOS, Linux, Windows, and iOS.
+
+## SDK
+
+### Add the SDK
+
+Add Maven Central to your Gradle repositories and declare the SDK dependency.
+
+```kotlin
+repositories { mavenCentral() }
+dependencies { implementation("com.fajarnuha.klassify:klassify-sdk:0.4.0") }
+```
+
+If your project uses `dependencyResolutionManagement`, add `mavenCentral()` in `settings.gradle.kts`. For Kotlin Multiplatform, declare the dependency in the source set you want to use, such as `commonMain`.
+
+### Kotlin DSL
+
+```kotlin
+import com.fajarnuha.klassify.TypeSafeClient
+import com.fajarnuha.klassify.choice
+import com.fajarnuha.klassify.noul
+import com.fajarnuha.klassify.score
+
+enum class Species { DOG, CAT, OTHER }
+
+val childFriendly by noul("Is this pet described as friendly with children?")
+val species by choice<Species>("What kind of pet is described?")
+val energy by score("How active is this pet?") {
+    levels("Mostly relaxed", "Moderately active", "Needs vigorous daily exercise")
+}
+
+suspend fun classifyPet(apiKey: String) {
+    val client = TypeSafeClient(apiKey)
+    try {
+        val result = client.evaluate(
+            "Playful terrier who loves kids and needs a long run every day.",
+            childFriendly, species, energy,
+        )
+        println(result[species].value)              // Species.DOG
+        println(result[childFriendly].probability)  // 0.0..1.0
+        println(result[energy].value)               // weighted score
+    } finally {
+        client.close()
+    }
+}
+```
+
+Klassify uses the property name as the question ID and the enum names as `choice` options. `result[species]` contains the selected value, its confidence, and the probability of each option. Pass a `JsonElement` to `evaluate` to classify structured data.
+
+All four SDK clients implement `ClassificationClient` and return the same typed Noul, Choice, and Score answers.
+
+| Client | Default model | API |
+| --- | --- | --- |
+| `TypeSafeClient` | `jev-latest` | [TypeSafe System One](https://docs.typesafe.ai/api) |
+| `OpenRouterClient` | `typesafe/jev-1.13` | [OpenRouter Decisions](https://openrouter.ai/docs/guides/community/multimodal-decisions) |
+| `OpenAIClient` | `gpt-6-luna` | [OpenAI Decisions](https://developers.openai.com/api/docs/guides/decisions) |
+| `GoogleClient` | `gemini-decision-1` | [Gemini Decisions](https://ai.google.dev/api/decisions) |
+
+Pass your provider's API key to the client constructor. To change the model, pass `model` when you evaluate a `QuestionSet`. For example, OpenRouter accepts `google/gemini-decision-1` and `openai/gpt-6-luna-decisions`. The clients make up to three attempts on HTTP 429 or 529. If a request fails, the client throws a provider-specific exception with `status` and `responseBody`. Calling `close()` also closes the underlying Ktor client.
+
+#### Image input
+
+Use `imageInput` with encoded PNG or JPEG bytes. Pass the image directly for an image-only decision, or place one or more images in a top-level JSON array alongside text.
+
+```kotlin
+import com.fajarnuha.klassify.ClassificationClient
+import com.fajarnuha.klassify.imageInput
+import com.fajarnuha.klassify.noul
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonPrimitive
+
+suspend fun collarProbability(client: ClassificationClient, photoBytes: ByteArray): Double {
+    val hasCollar by noul("Is the dog wearing a collar?")
+    val photo = imageInput(photoBytes, "image/jpeg")
+    val input = JsonArray(listOf(JsonPrimitive("Inspect the dog in this photo."), photo))
+    return client.evaluate(input, hasCollar)[hasCollar].probability
+}
+```
+
+TypeSafe image input is experimental. Its client sends the required opt-in header automatically. [TypeSafe image format and limits](https://docs.typesafe.ai/images)
 
 ## CLI
+
+The Klassify CLI uses TypeSafe Jev and runs on macOS, Linux, and Windows.
 
 ### Install
 
@@ -33,13 +114,15 @@ klassify run --recipe pet.json --text "A gentle cat that likes children and naps
 
 `--text` replaces the sample state in the recipe. The CLI prints a JSON object with an `answers` field. Look for the pet type in `species.choice`, the probability that the pet is friendly with children in `childFriendly.noul`, and the activity score in `energy.score`.
 
-Use `noul` to ask a yes-or-no question without a recipe. It prints the probability that the answer is true, from 0 to 1.
+Use `noul` to ask a yes-or-no question without a recipe. It prints the probability that the answer is true,     from 0 to 1.
 
 ```sh
 klassify noul -q "Is a tomato a fruit?"
 ```
 
 ### Run recipes
+
+JSON recipes and MCP requests use the [TypeSafe HTTP format](https://docs.typesafe.ai/api).
 
 A recipe needs a `questions` object and can also include `model` and `state`. Use `--text '...'` or `--state-json state.json` to override the recipe's state. Use `-j` as shorthand for `--state-json`. If neither the command nor the recipe supplies state, the CLI reads it from stdin. It prints the TypeSafe response as JSON.
 
@@ -61,6 +144,8 @@ Use `recipe check` to validate a recipe without making an API request.
 ```sh
 klassify recipe check --recipe pet.json
 ```
+
+For JSON recipes or CLI `--state-json`, represent an image as `{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,..."}}`.
 
 ### Triage recipes
 
@@ -115,82 +200,5 @@ klassify noul -t "A tomato"
 ### Run an MCP server
 
 Run `klassify mcp` to start an MCP server over stdio. Its `classify` tool takes `state` and `questions`, plus an optional `model`. The tool returns the TypeSafe response as structured content. Set `TYPESAFE_API_KEY` in the MCP client's environment. The server reserves stdout for protocol messages.
-
-## Add the SDK
-
-Add Maven Central to your Gradle repositories and declare the SDK dependency.
-
-```kotlin
-repositories { mavenCentral() }
-dependencies { implementation("com.fajarnuha.klassify:klassify-sdk:0.4.0") }
-```
-
-If your project uses `dependencyResolutionManagement`, add `mavenCentral()` in `settings.gradle.kts`. For Kotlin Multiplatform, declare the dependency in the source set you want to use, such as `commonMain`.
-
-## Kotlin DSL
-
-```kotlin
-import com.fajarnuha.klassify.TypeSafeClient
-import com.fajarnuha.klassify.choice
-import com.fajarnuha.klassify.noul
-import com.fajarnuha.klassify.score
-
-enum class Species { DOG, CAT, OTHER }
-
-val childFriendly by noul("Is this pet described as friendly with children?")
-val species by choice<Species>("What kind of pet is described?")
-val energy by score("How active is this pet?") {
-    levels("Mostly relaxed", "Moderately active", "Needs vigorous daily exercise")
-}
-
-suspend fun classifyPet(apiKey: String) {
-    val client = TypeSafeClient(apiKey)
-    try {
-        val result = client.evaluate(
-            "Playful terrier who loves kids and needs a long run every day.",
-            childFriendly, species, energy,
-        )
-        println(result[species].value)              // Species.DOG
-        println(result[childFriendly].probability)  // 0.0..1.0
-        println(result[energy].value)               // weighted score
-    } finally {
-        client.close()
-    }
-}
-```
-
-Klassify uses the property name as the question ID and the enum names as `choice` options. `result[species]` contains the selected value, its confidence, and the probability of each option. Pass a `JsonElement` to `evaluate` to classify structured data. JSON recipes and MCP requests use the [TypeSafe HTTP format](https://docs.typesafe.ai/api).
-
-All four SDK clients implement `ClassificationClient` and return the same typed Noul, Choice, and Score answers.
-
-| Client | Default model | API |
-| --- | --- | --- |
-| `TypeSafeClient` | `jev-latest` | [TypeSafe System One](https://docs.typesafe.ai/api) |
-| `OpenRouterClient` | `typesafe/jev-1.13` | [OpenRouter Decisions](https://openrouter.ai/docs/guides/community/multimodal-decisions) |
-| `OpenAIClient` | `gpt-6-luna` | [OpenAI Decisions](https://developers.openai.com/api/docs/guides/decisions) |
-| `GoogleClient` | `gemini-decision-1` | [Gemini Decisions](https://ai.google.dev/api/decisions) |
-
-Pass your provider's API key to the client constructor. To change the model, pass `model` when you evaluate a `QuestionSet`. For example, OpenRouter accepts `google/gemini-decision-1` and `openai/gpt-6-luna-decisions`. The clients make up to three attempts on HTTP 429 or 529. If a request fails, the client throws a provider-specific exception with `status` and `responseBody`. Calling `close()` also closes the underlying Ktor client.
-
-### Image input
-
-Use `imageInput` with encoded PNG or JPEG bytes. Pass the image directly for an image-only decision, or place one or more images in a top-level JSON array alongside text.
-
-```kotlin
-import com.fajarnuha.klassify.ClassificationClient
-import com.fajarnuha.klassify.imageInput
-import com.fajarnuha.klassify.noul
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonPrimitive
-
-suspend fun collarProbability(client: ClassificationClient, photoBytes: ByteArray): Double {
-    val hasCollar by noul("Is the dog wearing a collar?")
-    val photo = imageInput(photoBytes, "image/jpeg")
-    val input = JsonArray(listOf(JsonPrimitive("Inspect the dog in this photo."), photo))
-    return client.evaluate(input, hasCollar)[hasCollar].probability
-}
-```
-
-For JSON recipes or CLI `--state-json`, represent an image as `{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,..."}}`. TypeSafe image input is experimental. Its client sends the required opt-in header automatically. [TypeSafe image format and limits](https://docs.typesafe.ai/images)
 
 Licensed under the [Apache License 2.0](LICENSE).
