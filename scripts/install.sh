@@ -27,7 +27,11 @@ if [ -z "$checksum" ]; then
   exit 1
 fi
 printf '%s  %s\n' "$checksum" "$workdir/$archive" | sha256sum -c - >/dev/null
-tar -xzf "$workdir/$archive" -C "$workdir" klassify
-install -d "$install_dir"
+tar -xzf "$workdir/$archive" -C "$workdir" klassify klassify-recipe-runner
+runner_dir="$install_dir/klassify-recipe-runner/$version/lib"
+install -d "$runner_dir"
+for jar in "$workdir/klassify-recipe-runner/$version/lib/"*.jar; do
+  install -m 644 "$jar" "$runner_dir/"
+done
 install -m 755 "$workdir/klassify" "$install_dir/klassify"
 printf 'Installed klassify %s to %s/klassify\n' "$version" "$install_dir"

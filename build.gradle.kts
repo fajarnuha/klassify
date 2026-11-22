@@ -1,6 +1,9 @@
+import groovy.json.JsonSlurper
+
 plugins {
     id("com.vanniktech.maven.publish.base") version "0.37.0" apply false
     alias(libs.plugins.kotlin.multiplatform) apply false
+    alias(libs.plugins.kotlin.jvm) apply false
 }
 
 apply(from = "gradle/versioning.gradle.kts")
@@ -45,4 +48,37 @@ subprojects {
             }
         }
     }
+}
+
+fun registerRecipePack(taskName: String, directory: String, archiveBaseName: String, companion: String) =
+    tasks.register<Zip>(taskName) {
+        val manifest = layout.projectDirectory.file("$directory/pack.json")
+        archiveFileName.set(providers.fileContents(manifest).asText.map { content ->
+            val packVersion = (JsonSlurper().parseText(content) as Map<*, *>)["version"] as? String
+                ?: error("Recipe pack manifest at ${manifest.asFile} needs a version")
+            "$archiveBaseName-$packVersion.zip"
+        })
+        destinationDirectory.set(layout.buildDirectory.dir("recipe-packs"))
+        from(directory)
+        from("LICENSE")
+        from(companion) { into("recipes") }
+        isPreserveFileTimestamps = false
+        isReproducibleFileOrder = true
+    }
+
+val starterRecipePack = registerRecipePack(
+    "starterRecipePack", "recipe/starter", "klassify-starter-recipes", "recipe/email-triage.json",
+)
+val androidDevRecipePack = registerRecipePack(
+    "androidDevRecipePack", "recipe/android-dev", "klassify-android-dev-recipes", "recipe/app-review-triage.json",
+)
+tasks.register("recipePacks") { dependsOn(starterRecipePack, androidDevRecipePack) }
+
+tasks.register<Sync>("releaseRecipePacks") {
+    into(layout.buildDirectory.dir("release-recipe-packs"))
+    val starter = starterRecipePack.flatMap { it.archiveFile }
+    val androidDev = androidDevRecipePack.flatMap { it.archiveFile }
+    from(starter, androidDev)
+    from(starter) { rename { "klassify-starter-recipes.zip" } }
+    from(androidDev) { rename { "klassify-android-dev-recipes.zip" } }
 }

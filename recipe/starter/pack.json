@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "id": "klassify-starter",
+  "version": "0.3.0",
+  "recipes": [
+    {
+      "name": "sort-files",
+      "entrypoint": "recipes/sort-files.recipe.kts",
+      "runtime": "kotlin-jvm",
+      "runnerApi": 2
+    },
+    {
+      "name": "email-triage",
+      "entrypoint": "recipes/email-triage.recipe.kts",
+      "runtime": "kotlin-jvm",
+      "runnerApi": 1
+    }
+  ]
+}

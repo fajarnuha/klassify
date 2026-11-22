@@ -6,7 +6,9 @@ import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.main
 import com.github.ajalt.clikt.core.subcommands
 import com.github.ajalt.clikt.parameters.arguments.argument
+import com.github.ajalt.clikt.parameters.arguments.multiple
 import com.github.ajalt.clikt.parameters.arguments.optional
+import com.github.ajalt.clikt.parameters.options.flag
 import com.github.ajalt.clikt.parameters.options.option
 import com.github.ajalt.clikt.parameters.options.required
 import com.github.ajalt.clikt.parameters.options.versionOption
@@ -58,7 +60,12 @@ internal class Klassify : CliktCommand(name = "klassify") {
 }
 
 private class Run : CliktCommand(name = "run") {
-    private val recipeName by argument("recipe", help = "Recipe name in KLASSIFY_WORKDIR").optional()
+    override val treatUnknownOptionsAsArgs = true
+
+    private val recipeName by argument("recipe", help = "Installed recipe or name in KLASSIFY_WORKDIR").optional()
+    private val recipeOptions by argument("recipe-options", help = "Options declared by the installed recipe").multiple()
+    private val apply by option("--apply", help = "Preview recipe actions and ask before applying them").flag()
+    private val prepareOnly by option("--prepare-only", help = "Show prepared questions and inputs without calling TypeSafe").flag()
     private val recipe by option("--recipe", "-r", help = "JSON recipe path")
     private val text by option("--text", "-t", help = "Text state; defaults to recipe state or stdin")
     private val stateJson by option("--state-json", "-j", help = "JSON state file")
@@ -69,6 +76,33 @@ private class Run : CliktCommand(name = "run") {
     @OptIn(ExperimentalForeignApi::class)
     override fun run() {
         require(text == null || stateJson == null) { "Use either --text or --state-json" }
+        require(!apply || !prepareOnly) { "Use either --apply or --prepare-only" }
+        val name = if (recipe == null) recipeName else null
+        if (name != null && hasInstalledRecipeCandidate(name)) {
+            require(text == null && stateJson == null) { "Installed recipes prepare their own inputs" }
+            val terminal = if (apply) Terminal().also {
+                require(it.terminalInfo.interactive) { "--apply requires an interactive terminal" }
+            } else null
+            val prepared = prepareRecipe(name, recipeOptions, model)
+            if (apply) require(prepared.json["sourceFingerprint"] != null) { "This recipe has no postprocess hook" }
+            if (prepareOnly) {
+                writeLine(JsonObject(prepared.json - "sourceFingerprint" - "postprocess").toString())
+            } else {
+                val results = if (prepared.items.isEmpty()) emptyList() else {
+                    val client = TypeSafeClient(apiKey ?: environmentKey())
+                    try {
+                        evaluateBatchItems(prepared.items, prepared.spec, field, client, collectResults = apply)
+                    } finally {
+                        client.close()
+                    }
+                }
+                if (terminal != null) postprocessRecipe(name, recipeOptions, prepared, results, terminal)
+            }
+            return
+        }
+        require(recipeOptions.isEmpty()) { "Unexpected recipe argument '${recipeOptions.first()}'" }
+        require(!prepareOnly) { "--prepare-only requires an installed recipe" }
+        require(!apply) { "--apply requires an installed recipe with a postprocess hook" }
         val spec = loadRecipe(resolveRecipePath(recipe, recipeName))
         val state: JsonElement = when {
             text != null -> JsonPrimitive(text!!)
@@ -120,8 +154,7 @@ private class Batch : CliktCommand(name = "batch") {
                             "id must be a string or number"
                         }
                         id = recordId
-                        val result = runBlocking { client.evaluate(item.getValue("state"), spec.questions, model ?: spec.model) }
-                        buildJsonObject { put("id", id); put("result", result.json) }
+                        batchResult(client, spec, model, id, item.getValue("state"), null)
                     } catch (e: Exception) {
                         failures++
                         buildJsonObject { put("id", id); put("error", e.message ?: "Evaluation failed") }
@@ -137,6 +170,24 @@ private class Batch : CliktCommand(name = "batch") {
         check(failures == 0) { "$failures batch item(s) failed" }
     }
 }
+
+internal fun batchResult(
+    client: TypeSafeClient,
+    spec: RecipeSpec,
+    model: String?,
+    id: JsonElement,
+    state: JsonElement,
+    field: String?,
+): JsonObject {
+    val result = runBlocking { client.evaluate(state, spec.questions, model ?: spec.model) }.json
+    return classificationRow(id, result, field)
+}
+
+internal fun classificationRow(id: JsonElement, result: JsonObject, field: String?): JsonObject =
+    buildJsonObject {
+        put("id", id)
+        put("result", field?.let { selectField(result, it) } ?: result)
+    }
 
 private class Recipe : CliktCommand(name = "recipe") {
     override fun run() = Unit
@@ -373,7 +424,12 @@ private fun resolveNoulPath(): String {
     val workdir = getenv("KLASSIFY_WORKDIR")?.toKString()?.takeIf(String::isNotBlank)
     if (workdir != null) return "${workdir.trimEnd('/', '\\')}/noul.json"
 
-    val configDir = when (Platform.osFamily) {
+    return "${configDirectory()}/noul.json"
+}
+
+@OptIn(ExperimentalNativeApi::class, ExperimentalForeignApi::class)
+internal fun configDirectory(): String =
+    when (Platform.osFamily) {
         OsFamily.MACOSX -> "${getenv("HOME")?.toKString() ?: error("Cannot determine the home directory")}/Library/Application Support/klassify"
         OsFamily.LINUX -> {
             val configHome = getenv("XDG_CONFIG_HOME")?.toKString()?.takeIf { it.startsWith('/') }
@@ -383,8 +439,6 @@ private fun resolveNoulPath(): String {
         OsFamily.WINDOWS -> "${getenv("APPDATA")?.toKString() ?: error("Cannot determine the roaming app data directory")}/klassify"
         else -> error("No default config directory for ${Platform.osFamily}")
     }
-    return "$configDir/noul.json"
-}
 
 @OptIn(ExperimentalForeignApi::class)
 private fun createDirectories(path: String) {
@@ -409,10 +463,12 @@ private fun createDirectories(path: String) {
 
 internal expect fun makeDirectory(path: String): Int
 
-private data class RecipeSpec(val questions: QuestionSet, val model: String, val state: JsonElement?)
+internal data class RecipeSpec(val questions: QuestionSet, val model: String, val state: JsonElement?)
 
-private fun loadRecipe(path: String): RecipeSpec {
-    val json = Json.parseToJsonElement(readFile(path)).jsonObject
+private fun loadRecipe(path: String): RecipeSpec =
+    parseRecipe(Json.parseToJsonElement(readFile(path)).jsonObject)
+
+internal fun parseRecipe(json: JsonObject): RecipeSpec {
     val questions = QuestionSet.fromJson(json.getValue("questions").jsonObject)
     val modelValue = json["model"]
     require(modelValue == null || modelValue is JsonPrimitive && modelValue.isString) { "Model must be a string" }
@@ -421,7 +477,7 @@ private fun loadRecipe(path: String): RecipeSpec {
     return RecipeSpec(questions, model, json["state"])
 }
 
-private fun validateState(state: JsonElement) {
+internal fun validateState(state: JsonElement) {
     require(state is JsonObject || state is JsonArray ||
         state is JsonPrimitive && state.isString && state.content.isNotBlank()) {
         "Recipe state must be a nonblank string, object, or array"
@@ -506,7 +562,7 @@ private fun writeFile(path: String, contents: String) {
 }
 
 @OptIn(ExperimentalForeignApi::class)
-private fun readAll(file: CPointer<FILE>?): String {
+internal fun readAll(file: CPointer<FILE>?): String {
     val chunks = mutableListOf<ByteArray>()
     val buffer = ByteArray(8192)
     while (true) {
@@ -535,7 +591,7 @@ private fun readLine(file: CPointer<FILE>?): String? {
 }
 
 @OptIn(ExperimentalForeignApi::class)
-private fun writeLine(text: String) = writeLine(text, stdout)
+internal fun writeLine(text: String) = writeLine(text, stdout)
 
 @OptIn(ExperimentalForeignApi::class)
 private fun writeLine(text: String, file: CPointer<FILE>?) {
@@ -544,7 +600,10 @@ private fun writeLine(text: String, file: CPointer<FILE>?) {
 
 fun main(args: Array<String>) {
     try {
-        Klassify().subcommands(Run(), Batch(), Eval(), Recipe().subcommands(RecipeCheck()), Noul().subcommands(NoulSet()), Mcp()).main(args)
+        val recipes = Recipe().subcommands(
+            RecipeCheck(), RecipeDoctor(), RecipeInstall(), RecipeList(), RecipeUninstall(), RecipeUpdate(),
+        )
+        Klassify().subcommands(Run(), Batch(), Eval(), RecipeInstall(), recipes, Noul().subcommands(NoulSet()), Mcp()).main(args)
     } catch (e: Exception) {
         Terminal().danger(e.message ?: "Klassify failed", stderr = true)
         exitProcess(1)

@@ -11,4 +11,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "klassify"
-include(":klassify-sdk", ":klassify-cli")
+include(":klassify-sdk", ":klassify-cli", ":klassify-recipe-runner")

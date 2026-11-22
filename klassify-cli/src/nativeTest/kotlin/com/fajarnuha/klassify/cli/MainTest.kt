@@ -1,12 +1,18 @@
 package com.fajarnuha.klassify.cli
 
 import com.github.ajalt.clikt.testing.test
+import com.github.ajalt.mordant.terminal.Terminal
+import com.github.ajalt.mordant.terminal.TerminalRecorder
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
+import kotlin.experimental.ExperimentalNativeApi
+import kotlin.native.OsFamily
+import kotlin.native.Platform
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class MainTest {
     @Test
@@ -16,6 +22,35 @@ class MainTest {
             assertEquals(0, result.statusCode)
             assertEquals("klassify version $VERSION\n", result.stdout)
         }
+    }
+
+    @Test
+    fun movesRequireExplicitConfirmationAfterPreview() {
+        val plan = Json.parseToJsonElement("""
+            {"directory":"/downloads","moves":[{"id":"invoice.pdf","folder":"documents"}]}
+        """).jsonObject
+        for (answer in listOf(null, "", "n", "not yet", "yes")) {
+            val recorder = TerminalRecorder()
+            answer?.let { recorder.inputLines.add(it) }
+            var applied = false
+            confirmFileMoves(plan, Terminal(terminalInterface = recorder)) {
+                assertTrue(recorder.stderr().contains("Move 1 file? [y/N]"))
+                applied = true
+                1
+            }
+            val output = recorder.stderr()
+            assertTrue(output.indexOf("documents/invoice.pdf") in 0 until output.indexOf("Move 1 file?"))
+            assertEquals(answer == "yes", applied)
+            assertTrue(output.contains(if (applied) "Moved 1 file." else "No files moved."))
+        }
+    }
+
+    @OptIn(ExperimentalNativeApi::class)
+    @Test
+    fun recipeRunnerReceivesLargeRequestsOnStandardInput() {
+        if (Platform.osFamily == OsFamily.WINDOWS) return
+        val input = """{"file":"owner's résumé.pdf","value":"${"x".repeat(150_000)}"}"""
+        assertEquals(input, captureRunner(listOf("/bin/cat"), input = input))
     }
 
     @Test

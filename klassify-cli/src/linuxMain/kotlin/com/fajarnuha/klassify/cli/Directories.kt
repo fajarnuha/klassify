@@ -6,3 +6,5 @@ import platform.posix.mkdir
 
 @OptIn(ExperimentalForeignApi::class)
 internal actual fun makeDirectory(path: String): Int = mkdir(path, 448.convert())
+
+internal actual fun executablePath(): String = canonicalExecutable("/proc/self/exe")

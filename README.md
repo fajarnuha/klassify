@@ -108,7 +108,7 @@ Run `klassify --version` or `klassify -v` to check the installed version.
 Set `TYPESAFE_API_KEY` to your TypeSafe API key. Download the example recipe into your current directory and run it with your own text.
 
 ```sh
-curl -fL https://raw.githubusercontent.com/fajarnuha/klassify/main/examples/pet.json -o pet.json
+curl -fL https://raw.githubusercontent.com/fajarnuha/klassify/main/recipe/pet.json -o pet.json
 klassify run --recipe pet.json --text "A gentle cat that likes children and naps all day."
 ```
 
@@ -152,14 +152,54 @@ For JSON recipes or CLI `--state-json`, represent an image as `{"type":"image_ur
 From the repository root, run either recipe with its built-in sample. Set `TYPESAFE_API_KEY` before running.
 
 ```sh
-klassify run --recipe examples/email-triage.json --field answers.category.choice
-klassify run --recipe examples/app-review-triage.json
+klassify run --recipe recipe/email-triage.json --field answers.category.choice
+klassify run --recipe recipe/app-review-triage.json
 ```
 
-- [Email triage](examples/email-triage.json) returns `spam`, `promo`, or `important` in `answers.category.choice`. The `important` label also covers ordinary legitimate inbox mail. For structured input, send `from`, `subject`, and `body` when available.
-- [App review triage](examples/app-review-triage.json) returns a feedback category in `answers.category.choice` and an impact-based priority in `answers.priority.choice`. Priority ranges from `low` through `normal`, `high`, and `urgent`. For structured input, send `text` and include `rating`, `appVersion`, and `platform` when available.
+- [Email triage](recipe/email-triage.json) returns `spam`, `promo`, or `important` in `answers.category.choice`. The `important` label also covers ordinary legitimate inbox mail. For structured input, send `from`, `subject`, and `body` when available.
+- [App review triage](recipe/app-review-triage.json) returns a feedback category in `answers.category.choice` and an impact-based priority in `answers.priority.choice`. Priority ranges from `low` through `normal`, `high`, and `urgent`. For structured input, send `text` and include `rating`, `appVersion`, and `platform` when available.
 
 Replace the sample with `--text '...'` or pass a JSON object for one email or review with `--state-json input.json`. For multiple items, use `batch` and put one email or review in each line's `state`.
+
+### Install Kotlin recipe packs
+
+Klassify ships with the Kotlin recipe runner. Kotlin recipes need Java 21 or newer. Run `klassify recipe doctor` to check that the runner is available and that Klassify can find a supported Java installation. If needed, install a Java 21+ JDK and set `JAVA_HOME` or add its `bin` directory to `PATH`. Ordinary CLI commands and JSON recipes work without Java.
+
+```bash
+klassify recipe doctor
+klassify install klassify-starter
+klassify install android-dev
+klassify recipe list
+```
+
+`klassify install <pack-id>` downloads the latest official pack. `klassify recipe install` is equivalent. Both commands also accept a local ZIP path or HTTPS URL and store the pack in the Klassify config directory under `recipe-packs/`. Set `KLASSIFY_RECIPE_DIR` to use a different location. If `KLASSIFY_WORKDIR` contains a JSON recipe with the same name, that JSON file takes precedence. Install validates the pack. Running an installed recipe executes its Kotlin script with your user permissions, so use packs from sources you trust.
+
+```bash
+klassify run sort-files --dir ~/Downloads --folders documents,images,other
+klassify run email-triage --from store@example.com --subject "Order shipped" --body "Your package is on its way"
+klassify run email-triage --body "Please send the invoice" --criteria billing,support,other
+klassify run app-review-triage --reviews reviews.csv --app-version 1.8.0
+```
+
+- **Sort files** (`klassify-starter`) reads the immediate regular files in `--dir` (the current directory by default) and sends each filename and extension for classification. The returned folder is a suggestion. The recipe leaves files in place.
+- **Email triage** (`klassify-starter`) classifies one email into `spam`, `promo`, or `important`. Supply any of `--from`, `--subject`, and `--body`, or omit them to use the example email. `--criteria` replaces the default categories with comma-separated labels or a JSON object such as `'{"billing":"Invoices or payments","support":"Requests for help"}'`.
+- **App review triage** (`android-dev`) accepts UTF-8 CSV with `id`, `text`, `rating`, `appVersion`, and an optional `platform` column. It skips blank reviews, optionally filters by exact app version, and reports malformed rows with their line numbers. The review ID identifies each result.
+
+To move files after reviewing the proposed destinations, use a current Klassify CLI with `klassify-starter` 0.3.0 or later.
+
+```sh
+klassify run sort-files --dir ~/Downloads --folders documents,images --apply
+```
+
+Klassify lists the proposed moves and waits for an explicit yes in an interactive terminal. It creates destination folders as needed after confirmation and rejects existing destinations. Press Enter to decline.
+
+Each command writes one JSON line per input with an `id` and the TypeSafe `result`. Add `--field answers.folder.choice` to print just the folder choice alongside each ID. Use `--prepare-only` to see the questions and inputs before sending them to TypeSafe.
+
+`klassify recipe list` shows each installed pack's ID, version, and recipe names. Run `klassify recipe update klassify-starter` or `klassify recipe update android-dev` to fetch the latest official pack. If you installed starter pack 0.1.0, update it before installing `android-dev`, so only one pack provides app-review triage. To choose a specific release, pass a local ZIP or HTTPS URL as a second argument. Updates keep the installed version if validation fails. To remove a pack, run `klassify recipe uninstall <pack-id>`.
+
+Third-party packs can enable source-free updates by including an `updateUrl` in each release's `pack.json`. Use a stable HTTPS URL that serves the latest ZIP for that pack.
+
+To install from a ZIP, download a pack ZIP from a Klassify release or build both with `./gradlew recipePacks`. Local builds put the ZIPs under `build/recipe-packs/`, where you can pass their paths to `klassify install`. Use their manifests and scripts as templates for your own versioned pack. [Klassify releases](https://github.com/fajarnuha/klassify/releases) · [Starter pack](recipe/starter/pack.json) · [Android development pack](recipe/android-dev/pack.json)
 
 ### Run a batch or evaluate a recipe
 

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "android-dev",
+  "version": "0.1.0",
+  "recipes": [
+    {
+      "name": "app-review-triage",
+      "entrypoint": "recipes/app-review-triage.recipe.kts",
+      "runtime": "kotlin-jvm",
+      "runnerApi": 1
+    }
+  ]
+}

@@ -26,8 +26,9 @@ jobs:
             arch="${spec##*:}"
             mkdir -p "dist/$arch"
             cp "klassify-cli/build/bin/$target/releaseExecutable/klassify.kexe" "dist/$arch/klassify"
+            cp -R "klassify-cli/build/bin/$target/releaseExecutable/klassify-recipe-runner" "dist/$arch/"
             cp LICENSE "dist/$arch/LICENSE"
-            tar -czf "klassify-macos-$arch.tar.gz" -C "dist/$arch" klassify LICENSE
+            tar -czf "klassify-macos-$arch.tar.gz" -C "dist/$arch" klassify LICENSE klassify-recipe-runner
           done
       - uses: actions/upload-artifact@v4
         with:
@@ -53,8 +54,9 @@ jobs:
             arch="${spec##*:}"
             mkdir -p "dist/$arch"
             cp "klassify-cli/build/bin/$target/releaseExecutable/klassify.kexe" "dist/$arch/klassify"
+            cp -R "klassify-cli/build/bin/$target/releaseExecutable/klassify-recipe-runner" "dist/$arch/"
             cp LICENSE "dist/$arch/LICENSE"
-            tar -czf "klassify-linux-$arch.tar.gz" -C "dist/$arch" klassify LICENSE
+            tar -czf "klassify-linux-$arch.tar.gz" -C "dist/$arch" klassify LICENSE klassify-recipe-runner
           done
           dist/x64/klassify --help
           for flag in -v --version; do
@@ -67,13 +69,13 @@ jobs:
           dist/x64/klassify run --help
           dist/x64/klassify batch --help
           dist/x64/klassify eval --help
-          dist/x64/klassify recipe check --recipe examples/pet.json
-          if output="$(printf '%s\n' '{"id":"a","state":null}' | dist/x64/klassify batch --recipe examples/pet.json --api-key test 2>&1)"; then
+          dist/x64/klassify recipe check --recipe recipe/pet.json
+          if output="$(printf '%s\n' '{"id":"a","state":null}' | dist/x64/klassify batch --recipe recipe/pet.json --api-key test 2>&1)"; then
             echo "Expected invalid batch row" >&2
             exit 1
           fi
           [[ "$output" == *'"id":"a","error":'* ]]
-          if output="$(printf '%s\n' '{"state":"test","expected":{"species":"INVALID"}}' | dist/x64/klassify eval --recipe examples/pet.json --cases - --api-key test 2>&1)"; then
+          if output="$(printf '%s\n' '{"state":"test","expected":{"species":"INVALID"}}' | dist/x64/klassify eval --recipe recipe/pet.json --cases - --api-key test 2>&1)"; then
             echo "Expected invalid evaluation label" >&2
             exit 1
           fi
@@ -86,12 +88,12 @@ jobs:
             exit 1
           fi
           [[ "$output" == *"Model cannot be blank"* ]]
-          if output="$(KLASSIFY_WORKDIR="$PWD/examples" dist/x64/klassify run pet -t test --model '' --api-key test 2>&1)"; then
+          if output="$(KLASSIFY_WORKDIR="$PWD/recipe" dist/x64/klassify run pet -t test --model '' --api-key test 2>&1)"; then
             echo "Expected model validation error" >&2
             exit 1
           fi
           [[ "$output" == *"Model cannot be blank"* ]]
-          if output="$(KLASSIFY_WORKDIR="$PWD/examples" dist/x64/klassify run --recipe pet.json -t test --model '' --api-key test 2>&1)"; then
+          if output="$(KLASSIFY_WORKDIR="$PWD/recipe" dist/x64/klassify run --recipe pet.json -t test --model '' --api-key test 2>&1)"; then
             echo "Expected missing recipe error" >&2
             exit 1
           fi
@@ -102,11 +104,41 @@ jobs:
           path: klassify-linux-*.tar.gz
           if-no-files-found: error
 
+  recipe-packs:
+    needs: linux
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-linux
+      - run: |
+          ./gradlew releaseRecipePacks --console=plain
+          mkdir -p dist/cli
+          tar -xzf klassify-linux-x64.tar.gz -C dist/cli
+          bash scripts/test-recipe-packs.sh "$PWD/dist/cli/klassify" \
+            "$PWD/build/release-recipe-packs/klassify-starter-recipes.zip" \
+            "$PWD/build/release-recipe-packs/klassify-android-dev-recipes.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-recipe-packs
+          path: build/release-recipe-packs/*.zip
+          if-no-files-found: error
+
   linux-arm64:
     needs: linux
     runs-on: ubuntu-22.04-arm
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
       - uses: actions/download-artifact@v4
         with:
           name: release-linux
@@ -117,9 +149,10 @@ jobs:
           "$RUNNER_TEMP/klassify-install/klassify" --help
           "$RUNNER_TEMP/klassify-install/klassify" run --help
           "$RUNNER_TEMP/klassify-install/klassify" noul --help
+          "$RUNNER_TEMP/klassify-install/klassify" recipe doctor
 
   release:
-    needs: [macos, linux, linux-arm64]
+    needs: [macos, linux, linux-arm64, recipe-packs]
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -133,11 +166,11 @@ jobs:
       - name: Check installer against release archives
         shell: bash
         run: |
-          (cd dist && sha256sum klassify-*.tar.gz > SHA256SUMS)
+          (cd dist && sha256sum klassify-*.tar.gz klassify-*.zip > SHA256SUMS)
           sed "s/@VERSION@/$GITHUB_REF_NAME/g" scripts/install.sh > dist/install.sh
           sh -n dist/install.sh
           KLASSIFY_BASE_URL="file://$PWD/dist" KLASSIFY_INSTALL_DIR="$RUNNER_TEMP/klassify-install" sh dist/install.sh
           "$RUNNER_TEMP/klassify-install/klassify" run --help | grep -F -- '-j, --state-json'
-      - run: gh release create "$GITHUB_REF_NAME" dist/klassify-*.tar.gz dist/SHA256SUMS dist/install.sh --generate-notes --verify-tag
+      - run: gh release create "$GITHUB_REF_NAME" dist/klassify-*.tar.gz dist/klassify-*.zip dist/SHA256SUMS dist/install.sh --generate-notes --verify-tag
         env:
           GH_TOKEN: ${{ github.token }}
